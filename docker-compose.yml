@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: oceaniq_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-oceaniq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-oceaniq_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-oceaniq_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-oceaniq} -d ${POSTGRES_DB:-oceaniq_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
