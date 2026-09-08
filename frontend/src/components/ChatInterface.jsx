@@ -38,7 +38,7 @@ export default function ChatInterface({
   const [showHistory, setShowHistory] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [aiEngine, setAiEngine] = useState('optimus'); // 'optimus' | 'soundwave' | 'vector'
+  const [aiEngine, setAiEngine] = useState('ollama'); // 'ollama' | 'optimus' | 'gemini'
   const inputRef = useRef(null);
 
   const isAutobot = faction === 'autobot';
@@ -105,16 +105,16 @@ export default function ChatInterface({
           </div>
           <div>
             <h2 className="text-xs font-orbitron font-bold text-white tracking-wider">CYBERTRON QUERY CONSOLE</h2>
-            <span className="text-[10px] text-cyan-400/80 font-rajdhani">Zero-Hallucination SQL + Neural Engine</span>
+            <span className="text-[10px] text-cyan-400/80 font-rajdhani">Local Ollama AI + ARGO Telemetry Engine</span>
           </div>
         </div>
 
         {/* AI Engine Switcher */}
         <div className="flex items-center space-x-1 bg-white/5 p-1 rounded-xl border border-white/10">
           {[
-            { id: 'optimus', label: '🤖 Optimus Core', desc: 'Zero-Hallucination SQL' },
-            { id: 'soundwave', label: '🔊 Soundwave Intel', desc: 'Neural Forecast' },
-            { id: 'vector', label: '🌌 Vector Prime', desc: 'Hybrid LLM' },
+            { id: 'ollama', label: '🦙 Ollama Local', desc: 'Local AI (Ollama - Free & Private)' },
+            { id: 'optimus', label: '⚡ Hybrid Core', desc: 'Ollama AI + Telemetry SQL' },
+            { id: 'gemini', label: '🌌 Gemini Cloud', desc: 'Google Gemini API' },
           ].map(eng => (
             <button
               key={eng.id}
@@ -128,7 +128,7 @@ export default function ChatInterface({
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              {eng.label.split(' ')[0]} {eng.label.split(' ')[1]}
+              {eng.label}
             </button>
           ))}
         </div>
