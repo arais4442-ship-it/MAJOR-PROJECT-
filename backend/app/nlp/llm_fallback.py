@@ -1,72 +1,160 @@
 import os
-from typing import Dict, Any, Optional
+import httpx
+from typing import Dict, Any, Optional, List
 from backend.app.config import settings
 
-class LLMFallbackEngine:
+class LLMEngine:
     def __init__(self):
-        self.api_key = settings.GEMINI_API_KEY
+        self.ollama_base_url = settings.OLLAMA_BASE_URL.rstrip('/')
+        self.ollama_model = settings.OLLAMA_MODEL
+        self.gemini_api_key = settings.GEMINI_API_KEY
+        self.provider = settings.LLM_PROVIDER.lower()
+
+    async def get_ollama_models(self) -> List[str]:
+        """
+        Fetch installed models from local Ollama instance.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                res = await client.get(f"{self.ollama_base_url}/api/tags")
+                if res.status_code == 200:
+                    data = res.json()
+                    models = [m.get("name") for m in data.get("models", []) if m.get("name")]
+                    return models
+        except Exception:
+            pass
+        return []
+
+    async def _query_ollama(self, prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+        """
+        Send prompt to local Ollama instance.
+        """
+        try:
+            # Auto-detect installed model if configured model is not specified or we can find one
+            models = await self.get_ollama_models()
+            model_to_use = self.ollama_model
+            if models and (model_to_use not in models and f"{model_to_use}:latest" not in models):
+                model_to_use = models[0]  # Use first installed model
+
+            payload = {
+                "model": model_to_use,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "top_p": 0.9,
+                }
+            }
+            if system_prompt:
+                payload["system"] = system_prompt
+
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                res = await client.post(f"{self.ollama_base_url}/api/generate", json=payload)
+                if res.status_code == 200:
+                    data = res.json()
+                    return data.get("response", "").strip()
+        except Exception as e:
+            print(f"[Ollama Error] {e}")
+            return None
+        return None
+
+    async def _query_gemini(self, prompt: str, system_prompt: Optional[str] = None) -> Optional[str]:
+        """
+        Send prompt to Google Gemini API as fallback or primary if configured.
+        """
+        if not self.gemini_api_key or self.gemini_api_key == "your_gemini_api_key_here":
+            return None
+
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=self.gemini_api_key)
+            # Try newer available models gracefully
+            for model_name in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-pro"]:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                    response = await model.generate_content_async(full_prompt)
+                    if response and response.text:
+                        return response.text.strip()
+                except Exception:
+                    continue
+        except Exception as e:
+            print(f"[Gemini Error] {e}")
+            return None
+        return None
 
     async def fallback_interpret(self, query: str, context: Optional[str] = None) -> Dict[str, Any]:
         """
-        Optional Gemini API fallback for interpreting low-confidence queries.
-        If no API key is set, returns a structured fallback response gracefully.
+        Interpret ambiguous / low-confidence query using local Ollama or Gemini.
         """
-        if not self.api_key or self.api_key == "your_gemini_api_key_here":
+        prompt = (
+            f"You are OceanIQ, an ARGO ocean data specialist. Interpret this query for ocean parameters: '{query}'. "
+            f"Provide a clear 2-sentence summary of what ocean data to query (such as region, depth, parameter, trend)."
+        )
+
+        response = await self._query_ollama(prompt)
+        if response:
             return {
-                "interpretation": f"Low confidence query interpreted using default oceanography rule heuristics: '{query}'",
-                "confidence_boost": 0.15,
-                "llm_used": False
-            }
-        
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=self.api_key)
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            prompt = f"You are OceanIQ, an ARGO ocean data specialist. Interpret this query for ocean parameters: '{query}'. Provide a clear 2-sentence summary of what ocean data to query."
-            response = await model.generate_content_async(prompt)
-            return {
-                "interpretation": response.text.strip(),
+                "interpretation": response,
                 "confidence_boost": 0.30,
-                "llm_used": True
+                "llm_used": True,
+                "provider": "ollama"
             }
-        except Exception as e:
+
+        response = await self._query_gemini(prompt)
+        if response:
             return {
-                "interpretation": f"Fallback error: {str(e)}. Defaulting to rule-based retrieval.",
-                "confidence_boost": 0.0,
-                "llm_used": False
+                "interpretation": response,
+                "confidence_boost": 0.30,
+                "llm_used": True,
+                "provider": "gemini"
             }
 
-    async def chat(self, query: str, context: Optional[str] = None) -> str:
+        return {
+            "interpretation": f"Low confidence query interpreted using oceanography rule heuristics: '{query}'",
+            "confidence_boost": 0.15,
+            "llm_used": False,
+            "provider": "none"
+        }
+
+    async def chat(self, query: str, context: Optional[str] = None, provider_preference: Optional[str] = None) -> str:
         """
-        Direct conversational chat endpoint using Gemini.
+        Direct conversational and predictive chat endpoint with oceanographic intelligence.
         """
-        if not self.api_key or self.api_key == "your_gemini_api_key_here":
-            return (
-                f"**OceanIQ Standard Retrieval Console**\n\n"
-                f"I processed your query: '{query}'. To activate full, flexible generative AI conversational "
-                f"responses, please ensure a valid `GEMINI_API_KEY` is configured in the `.env` file."
-            )
+        system_instruction = (
+            "You are OceanIQ AI, an advanced oceanographic intelligence assistant specialized in ARGO float telemetry, "
+            "marine sciences, ocean parameters (temperature, salinity, pressure, dissolved oxygen, chlorophyll), "
+            "climate trends, ocean forecasts, and anomaly detection.\n\n"
+            "Guidelines:\n"
+            "- Answer questions with high scientific accuracy, structured analysis, and clear explanations.\n"
+            "- When asked about future predictions, multi-year forecasts, or drawbacks/challenges (e.g. data sparsity, sensor drift, "
+            "El Niño/IOD variability, climate modeling uncertainty, non-linear atmospheric coupling), provide a clear, realistic scientific breakdown.\n"
+            "- Use clean markdown formatting with bold terms and bullet points.\n"
+            "- Incorporate any provided telemetry metrics naturally into the answer if relevant."
+        )
 
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=self.api_key)
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            
-            system_instruction = (
-                "You are OceanIQ, a Cybertronian-themed ARGO ocean telemetry assistant (Core V2.5). "
-                "Answer the user's question with high intelligence, scientific accuracy, and a sleek, engaging tone. "
-                "Provide bullet points or a brief paragraph (max 4 sentences total) keeping explanations punchy, structured, and easy to read. "
-                "Use markdown formatting with bolding for terms. "
-                "If they are asking conversational greetings, respond warmly. "
-                "If they are asking a science, instrumentation, or oceanography question, answer directly. "
-                "If database metrics context is provided, incorporate it naturally as real telemetry metrics."
-            )
-            
-            prompt = f"{system_instruction}\n\nUser Query: {query}\n\nTelemetry Context: {context if context else 'No live telemetry retrieved.'}"
-            response = await model.generate_content_async(prompt)
-            return response.text.strip()
-        except Exception as e:
-            return f"Core neural matrix failure: {str(e)}. Please try again."
+        prompt = f"User Query: {query}\n\nOcean Telemetry / Database Context:\n{context if context else 'No live telemetry retrieved.'}"
 
-llm_fallback = LLMFallbackEngine()
+        target_provider = (provider_preference or self.provider).lower()
 
+        # 1. Try Ollama if requested or default
+        if target_provider in ["ollama", "local", "auto"]:
+            ollama_resp = await self._query_ollama(prompt, system_instruction)
+            if ollama_resp:
+                return ollama_resp
+
+        # 2. Try Gemini fallback if Ollama failed or Gemini was chosen
+        if target_provider in ["gemini", "cloud", "auto"] or target_provider == "ollama":
+            gemini_resp = await self._query_gemini(prompt, system_instruction)
+            if gemini_resp:
+                return gemini_resp
+
+        # 3. If neither worked, provide clear local diagnostics
+        return (
+            f"**OceanIQ Telemetry Analysis — {query}**\n\n"
+            f"• **Query Assessment:** Processing analytical ocean query with rule-based heuristics.\n"
+            f"• **Context Telemetry:** {context if context else 'Telemetry parameters evaluated across ARGO profile database.'}\n\n"
+            f"*(Note: To activate local Ollama AI intelligence, ensure Ollama is running on `http://127.0.0.1:11434` with a model like `ollama run llama3`)*"
+        )
+
+llm_fallback = LLMEngine()
