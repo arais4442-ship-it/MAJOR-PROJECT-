@@ -59,28 +59,32 @@ async def process_query(req: QueryRequest, db: AsyncSession = Depends(get_db)):
         if req.filters.get('maxDepth') is not None:
             slots['max_depth'] = float(req.filters['maxDepth'])
 
-    ai_engine = req.filters.get("aiEngine", "optimus") if req.filters else "optimus"
+    ai_engine = req.filters.get("aiEngine", "ollama") if req.filters else "ollama"
 
-    # Identify conversational or general inquiries that do not target database querying
+    # Identify conversational, predictive, or broad ocean inquiries that benefit from generative AI
     general_words = {
         "hello", "hi", "hey", "who are you", "what is your name", "your directive", 
         "creator", "created you", "built you", "how are you", "help", "guide",
         "what is an argo", "how does a float", "explain salinity", "explain temperature",
-        "what is salinity", "define salinity", "what is dissolved oxygen", "what is chlorophyll-a"
+        "what is salinity", "define salinity", "what is dissolved oxygen", "what is chlorophyll-a",
+        "drawback", "drawbacks", "future", "predict", "challenge", "challenges", "limitation", "limitations",
+        "next two years", "forecast", "climate change", "why", "how will", "can you"
     }
     q_lower = query_text.lower()
     is_conversational = any(w in q_lower for w in general_words)
     
-    question_words = {"what", "how", "why", "who", "explain", "describe", "define", "tell me"}
-    if any(q_lower.startswith(w) for w in question_words) and not any(r in q_lower for r in ["arabian", "bengal", "laccadive", "equatorial", "indian"]):
+    question_words = {"what", "how", "why", "who", "explain", "describe", "define", "tell me", "can you", "could you", "predict"}
+    if any(q_lower.startswith(w) for w in question_words) and not any(r in q_lower for r in ["arabian", "bengal", "laccadive", "equatorial"]):
         is_conversational = True
 
-    use_llm = (ai_engine == "vector") or is_conversational
+    # Use LLM (Ollama or Gemini) if selected or if query is analytical / conversational
+    use_llm = (ai_engine in ["ollama", "vector", "optimus"]) or is_conversational or (intent_confidence < 0.70)
 
     llm_info = None
     if intent_confidence < 0.65 and not use_llm:
         llm_info = await llm_fallback.fallback_interpret(query_text)
         intent_confidence += llm_info.get("confidence_boost", 0.0)
+
 
     # 1. Fetch live or cached data from SQL
     stmt, base_citations = sql_builder.build_query(slots)
@@ -149,7 +153,7 @@ async def process_query(req: QueryRequest, db: AsyncSession = Depends(get_db)):
         else:
             context = "No specific telemetry data was matched for this query from the database."
             
-        answer_text = await llm_fallback.chat(query_text, context)
+        answer_text = await llm_fallback.chat(query_text, context, provider_preference=ai_engine)
         intent = "conversational" if is_conversational else intent
     else:
         answer_text = template_nlg.generate_response(intent, slots, summary_stats, {})
@@ -527,3 +531,19 @@ async def record_feedback(req: FeedbackRequest, db: AsyncSession = Depends(get_d
     db.add(fb)
     await db.commit()
     return {"status": "success", "message": "Feedback recorded successfully"}
+
+
+# ─── LLM / Ollama Status Endpoint ───────────────────────────────────────────
+
+@router.get("/llm/status")
+async def get_llm_status():
+    ollama_models = await llm_fallback.get_ollama_models()
+    return {
+        "provider": settings.LLM_PROVIDER,
+        "ollama_base_url": settings.OLLAMA_BASE_URL,
+        "ollama_online": len(ollama_models) > 0,
+        "ollama_models": ollama_models,
+        "current_model": settings.OLLAMA_MODEL if (settings.OLLAMA_MODEL in ollama_models or not ollama_models) else (ollama_models[0] if ollama_models else settings.OLLAMA_MODEL),
+        "gemini_configured": bool(settings.GEMINI_API_KEY and settings.GEMINI_API_KEY != "your_gemini_api_key_here")
+    }
+
