@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     SYNC_DATABASE_URL: str = "sqlite:///./oceaniq.db"
     
     GEMINI_API_KEY: str = ""
+    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
+    OLLAMA_MODEL: str = "llama3"
+    LLM_PROVIDER: str = "ollama"  # "ollama" | "gemini" | "auto"
     CONFIDENCE_THRESHOLD: float = 0.65
     
     DEFAULT_REGION_MIN_LAT: float = 0.0
@@ -20,3 +23,4 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 settings = Settings()
+
