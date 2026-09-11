@@ -126,10 +126,11 @@ class LLMEngine:
             "marine sciences, ocean parameters (temperature, salinity, pressure, dissolved oxygen, chlorophyll), "
             "climate trends, ocean forecasts, and anomaly detection.\n\n"
             "Guidelines:\n"
-            "- Answer questions with high scientific accuracy, structured analysis, and clear explanations.\n"
+            "- Answer every question in exactly 5 numbered points (1. through 5.); never write a paragraph-only answer and never exceed 10 points.\n"
+            "- Keep each point concise, scientifically accurate, and directly relevant to the user's ocean question.\n"
             "- When asked about future predictions, multi-year forecasts, or drawbacks/challenges (e.g. data sparsity, sensor drift, "
             "El Niño/IOD variability, climate modeling uncertainty, non-linear atmospheric coupling), provide a clear, realistic scientific breakdown.\n"
-            "- Use clean markdown formatting with bold terms and bullet points.\n"
+            "- Use clean markdown formatting with numbered points and bold labels.\n"
             "- Incorporate any provided telemetry metrics naturally into the answer if relevant."
         )
 
@@ -152,9 +153,11 @@ class LLMEngine:
         # 3. If neither worked, provide clear local diagnostics
         return (
             f"**OceanIQ Telemetry Analysis — {query}**\n\n"
-            f"• **Query Assessment:** Processing analytical ocean query with rule-based heuristics.\n"
-            f"• **Context Telemetry:** {context if context else 'Telemetry parameters evaluated across ARGO profile database.'}\n\n"
-            f"*(Note: To activate local Ollama AI intelligence, ensure Ollama is running on `http://127.0.0.1:11434` with a model like `ollama run llama3`)*"
+            f"1. **Query assessment:** Processing the ocean question with rule-based heuristics.\n"
+            f"2. **Telemetry context:** {context if context else 'ARGO profile database parameters evaluated.'}\n"
+            f"3. **Data mode:** No live generative response was available.\n"
+            f"4. **Local AI:** Ollama should be running at `http://127.0.0.1:11434`.\n"
+            f"5. **Model:** Start a model with `ollama run llama3` and retry the question."
         )
 
 llm_fallback = LLMEngine()
