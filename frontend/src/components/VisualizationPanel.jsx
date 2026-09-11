@@ -1,233 +1,309 @@
 'use client';
-import React, { useState } from 'react';
-import dynamic from 'next/dynamic';
-import { BarChart2, Layers, FlaskConical, TrendingUp, Microscope, Download, Maximize2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Send, Sparkles, MessageSquare, Bot, User, Star, Clock, Trash2, Copy, 
+  ThumbsUp, ThumbsDown, Cpu, Zap, Shield, Radio, Check
+} from 'lucide-react';
+import { cyberAudio } from '../utils/cyberAudio';
 
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
-
-const TABS = [
-  { id: 'timeseries', label: 'Time Series', icon: TrendingUp },
-  { id: 'depth', label: 'Depth Profile', icon: Layers },
-  { id: 'ts', label: 'T-S Diagram', icon: Microscope },
-  { id: 'bgc', label: 'BGC Params', icon: FlaskConical },
-  { id: 'forecast', label: 'Forecast', icon: BarChart2 },
+const SUGGESTED_PROMPTS = [
+  "Show temperature trends in Arabian Sea",
+  "Compare surface vs deep pressure profiles",
+  "Show float profiles in Bay of Bengal",
+  "Temperature anomalies this year",
+  "Salinity in equatorial Indian Ocean",
 ];
 
-const DARK_LAYOUT = {
-  paper_bgcolor: 'transparent',
-  plot_bgcolor: 'rgba(0,0,0,0)',
-  font: { color: '#94a3b8', family: 'Inter, system-ui' },
-  margin: { l: 55, r: 30, t: 30, b: 45 },
-  xaxis: { gridcolor: 'rgba(255,255,255,0.05)', tickfont: { color: '#64748b' }, zerolinecolor: 'rgba(255,255,255,0.1)' },
-  yaxis: { gridcolor: 'rgba(255,255,255,0.05)', tickfont: { color: '#64748b' }, zerolinecolor: 'rgba(255,255,255,0.1)' },
-  legend: { font: { color: '#e2e8f0' }, orientation: 'h', y: 1.12 },
-};
-
-function EmptyState({ label }) {
-  return (
-    <div className="h-64 flex flex-col items-center justify-center text-slate-500 space-y-4 relative overflow-hidden rounded-xl border border-white/5 bg-black/20 p-4">
-      <div className="absolute inset-0 opacity-[0.03] bg-[url('/images/argo-schematic.png')] bg-cover bg-center pointer-events-none" />
-      <img src="/images/argo-schematic.png" alt="ARGO Float Schematic" className="w-[120px] h-[80px] object-cover rounded-lg border border-cyan-500/20 shadow-md shadow-cyan-500/5 animate-pulse" />
-      <div className="text-center relative z-10 space-y-1">
-        <p className="text-xs font-orbitron font-bold text-cyan-300 uppercase tracking-widest">NO {label.toUpperCase()} DATA LOADED</p>
-        <p className="text-[11px] text-slate-400 font-rajdhani max-w-xs mx-auto">
-          Submit a cyber query via command console to load ARGO profile measurements.
-        </p>
-      </div>
-    </div>
-  );
+function parseMarkdown(text) {
+  if (!text) return text;
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em class="text-cyan-300 font-semibold">$1</em>');
 }
 
-function TimeSeriesTab({ chartData, forecastData }) {
-  if (!chartData) return <EmptyState label="time series" />;
-  const unit = chartData.unit || '°C';
-  const param = chartData.parameter || 'Temperature';
-  const timeSeriesX = chartData.time_series_x || chartData.x || [];
-  const timeSeriesY = chartData.time_series_y || chartData.y || [];
+export default function ChatInterface({ 
+  onExecuteQuery, 
+  loading, 
+  currentAnswer, 
+  currentQuery, 
+  filters,
+  faction = 'autobot'
+}) {
+  const [inputText, setInputText] = useState('');
+  const [history, setHistory] = useState([]);
+  const [saved, setSaved] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [aiEngine, setAiEngine] = useState('ollama'); // 'ollama' | 'optimus' | 'gemini'
+  const inputRef = useRef(null);
 
-  const traces = [{
-    x: timeSeriesX, y: timeSeriesY,
-    mode: 'lines+markers', type: 'scatter',
-    name: `${param} (${unit})`,
-    line: { color: '#00d4ff', width: 2.5 },
-    marker: { size: 5, color: '#00d4ff' },
-    fill: 'tozeroy',
-    fillcolor: 'rgba(0,212,255,0.06)',
-  }];
+  const isAutobot = faction === 'autobot';
 
-  if (forecastData?.forecast_series) {
-    const futureX = Array.from({ length: forecastData.steps || forecastData.forecast_series.length }, (_, i) => `+${i + 1}`);
-    traces.push({
-      x: futureX, y: forecastData.forecast_series,
-      mode: 'lines+markers', type: 'scatter', name: 'LSTM Forecast',
-      line: { color: '#f59e0b', width: 2.5, dash: 'dot' },
-      marker: { size: 6, color: '#fbbf24' },
-    });
-  }
+  useEffect(() => {
+    const storedHistory = JSON.parse(localStorage.getItem('oceaniq_history') || '[]');
+    const storedSaved = JSON.parse(localStorage.getItem('oceaniq_saved') || '[]');
+    setHistory(storedHistory);
+    setSaved(storedSaved);
+  }, []);
 
-  return (
-    <Plot data={traces}
-      layout={{ ...DARK_LAYOUT, autosize: true,
-        xaxis: { ...DARK_LAYOUT.xaxis, title: { text: chartData.time_series_x_label || 'Date', font: { color: '#64748b' } } },
-        yaxis: { ...DARK_LAYOUT.yaxis, title: { text: chartData.time_series_y_label || `${param} (${unit})`, font: { color: '#64748b' } } }
-      }}
-      useResizeHandler style={{ width: '100%', height: '280px' }}
-      config={{ responsive: true, displayModeBar: false }} />
-  );
-}
+  useEffect(() => {
+    if (currentAnswer && !loading) {
+      cyberAudio.playQueryLock();
+    }
+  }, [currentAnswer, loading]);
 
-function DepthProfileTab({ chartData }) {
-  if (!chartData) return <EmptyState label="depth profile" />;
-  const isDepth = chartData.type === 'depth_profile';
-  const x = isDepth ? chartData.x : chartData.y;
-  const y = isDepth ? chartData.y : chartData.x;
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    if (!inputText.trim() || loading) return;
+    submitQuery(inputText);
+  };
 
-  const traces = [{
-    x, y, mode: 'lines+markers', type: 'scatter',
-    name: chartData.parameter || 'Temperature',
-    line: { color: '#6366f1', width: 3, shape: 'spline' },
-    marker: { size: 6, color: '#818cf8' },
-    fill: 'tozerox',
-    fillcolor: 'rgba(99,102,241,0.08)',
-  }];
+  const submitQuery = (query) => {
+    cyberAudio.playEnergonCharge();
+    const newHistory = [query, ...history.filter(h => h !== query)].slice(0, 10);
+    setHistory(newHistory);
+    localStorage.setItem('oceaniq_history', JSON.stringify(newHistory));
+    onExecuteQuery(query, { ...filters, aiEngine });
+    setInputText('');
+  };
 
-  return (
-    <Plot data={traces}
-      layout={{ ...DARK_LAYOUT, autosize: true,
-        xaxis: { ...DARK_LAYOUT.xaxis, title: { text: chartData.x_label || `${chartData.parameter} (${chartData.unit})`, font: { color: '#64748b' } } },
-        yaxis: { ...DARK_LAYOUT.yaxis, autorange: 'reversed', title: { text: 'Pressure / Depth (dbar)', font: { color: '#64748b' } } }
-      }}
-      useResizeHandler style={{ width: '100%', height: '280px' }}
-      config={{ responsive: true, displayModeBar: false }} />
-  );
-}
+  const toggleSave = (query) => {
+    cyberAudio.playClick();
+    const newSaved = saved.includes(query) ? saved.filter(s => s !== query) : [query, ...saved];
+    setSaved(newSaved);
+    localStorage.setItem('oceaniq_saved', JSON.stringify(newSaved));
+  };
 
-function TSDiagramTab({ chartData }) {
-  if (!chartData || (!chartData.salinity_data && !chartData.y)) return <EmptyState label="T-S diagram" />;
-
-  const salinity = chartData.salinity_data || Array.from({ length: (chartData.x || []).length }, (_, i) => 34 + Math.random() * 2);
-  const temperature = chartData.temperature_data || chartData.x || [];
-  const depth = chartData.pressure_data || chartData.y || [];
-
-  const traces = [{
-    x: salinity, y: temperature,
-    mode: 'markers', type: 'scatter', name: 'Water Masses',
-    marker: {
-      size: 7,
-      color: depth,
-      colorscale: 'Viridis',
-      showscale: true,
-      colorbar: { title: 'Depth (dbar)', tickfont: { color: '#64748b' }, titlefont: { color: '#64748b' } },
-    },
-  }];
-
-  return (
-    <Plot data={traces}
-      layout={{ ...DARK_LAYOUT, autosize: true,
-        xaxis: { ...DARK_LAYOUT.xaxis, title: { text: 'Salinity (PSU)', font: { color: '#64748b' } } },
-        yaxis: { ...DARK_LAYOUT.yaxis, title: { text: 'Temperature (°C)', font: { color: '#64748b' } } }
-      }}
-      useResizeHandler style={{ width: '100%', height: '280px' }}
-      config={{ responsive: true, displayModeBar: false }} />
-  );
-}
-
-function BGCTab({ chartData }) {
-  if (!chartData) return <EmptyState label="BGC" />;
-
-  const hasBGC = chartData.oxygen_data || chartData.chl_data;
-  if (!hasBGC) {
-    return (
-      <div className="h-64 flex flex-col items-center justify-center text-slate-500 space-y-3">
-        <FlaskConical className="w-10 h-10 text-slate-600" />
-        <p className="text-sm font-medium text-slate-400">Ask about O₂ or Chlorophyll-a</p>
-        <p className="text-xs text-slate-500">Try: "Show dissolved oxygen in Arabian Sea"</p>
-      </div>
-    );
-  }
-
-  const depth = chartData.y || [];
-  const traces = [];
-  if (chartData.oxygen_data) {
-    traces.push({ x: chartData.oxygen_data, y: depth, mode: 'lines+markers', name: 'O₂ (µmol/kg)', line: { color: '#10b981', width: 2.5 }, yaxis: 'y' });
-  }
-  if (chartData.chl_data) {
-    traces.push({ x: chartData.chl_data, y: depth, mode: 'lines+markers', name: 'Chl-a (mg/m³)', line: { color: '#06b6d4', width: 2.5, dash: 'dot' }, yaxis: 'y' });
-  }
-
-  return (
-    <Plot data={traces}
-      layout={{ ...DARK_LAYOUT, autosize: true,
-        xaxis: { ...DARK_LAYOUT.xaxis, title: { text: 'BGC Parameter Value', font: { color: '#64748b' } } },
-        yaxis: { ...DARK_LAYOUT.yaxis, autorange: 'reversed', title: { text: 'Depth (dbar)', font: { color: '#64748b' } } }
-      }}
-      useResizeHandler style={{ width: '100%', height: '280px' }}
-      config={{ responsive: true, displayModeBar: false }} />
-  );
-}
-
-function ForecastTab({ forecastData, chartData }) {
-  if (!forecastData?.forecast_series) return <EmptyState label="forecast" />;
-
-  const hist = (chartData?.y || []).slice(-20);
-  const histX = hist.map((_, i) => `T-${hist.length - i}`);
-  const futureX = Array.from({ length: forecastData.forecast_series.length }, (_, i) => `T+${i + 1}`);
-
-  const traces = [
-    { x: histX, y: hist, mode: 'lines', name: 'Historical', line: { color: '#00d4ff', width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(0,212,255,0.05)' },
-    { x: futureX, y: forecastData.forecast_series, mode: 'lines+markers', name: 'LSTM Forecast', line: { color: '#f59e0b', width: 2.5, dash: 'dot' }, marker: { size: 7, color: '#fbbf24' } },
-  ];
-
-  return (
-    <Plot data={traces}
-      layout={{ ...DARK_LAYOUT, autosize: true,
-        xaxis: { ...DARK_LAYOUT.xaxis, title: { text: 'Time Steps', font: { color: '#64748b' } } },
-        yaxis: { ...DARK_LAYOUT.yaxis, title: { text: chartData?.y_label || 'Value', font: { color: '#64748b' } } }
-      }}
-      useResizeHandler style={{ width: '100%', height: '280px' }}
-      config={{ responsive: true, displayModeBar: false }} />
-  );
-}
-
-export default function VisualizationPanel({ chartData, forecastData }) {
-  const [activeTab, setActiveTab] = useState('timeseries');
-
-  const handleDownload = () => {
-    const plotDiv = document.querySelector('.js-plotly-plot');
-    if (plotDiv && window.Plotly) {
-      window.Plotly.downloadImage(plotDiv, { format: 'png', filename: `oceaniq-${activeTab}`, width: 1200, height: 600 });
+  const copyAnswer = () => {
+    if (currentAnswer) {
+      cyberAudio.playClick();
+      navigator.clipboard.writeText(currentAnswer);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
+  const clearHistory = () => {
+    cyberAudio.playClick();
+    setHistory([]);
+    localStorage.removeItem('oceaniq_history');
+  };
+
   return (
-    <div className="glass-card overflow-hidden">
-      {/* Tab Header */}
-      <div className="flex items-center justify-between border-b border-white/5 px-2">
-        <div className="flex overflow-x-auto">
-          {TABS.map(tab => {
-            const Icon = tab.icon;
-            return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-1.5 px-4 py-3 text-xs font-semibold border-b-2 transition-all whitespace-nowrap ${activeTab === tab.id ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+    <div className={`glass-card flex flex-col border ${isAutobot ? 'border-cyan-500/30' : 'border-fuchsia-500/30'} relative overflow-hidden`} style={{ minHeight: '440px' }}>
+      <div className="energon-scanline" />
+
+      {/* Header Bar */}
+      <div className="flex items-center justify-between p-3.5 border-b border-white/8 bg-black/40">
+        <div className="flex items-center space-x-2">
+          <div className={`p-1.5 rounded-lg border ${isAutobot ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-fuchsia-500/20 border-fuchsia-400 text-fuchsia-300'}`}>
+            <MessageSquare className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-xs font-orbitron font-bold text-white tracking-wider">CYBERTRON QUERY CONSOLE</h2>
+            <span className="text-[10px] text-cyan-400/80 font-rajdhani">Local Ollama AI + ARGO Telemetry Engine</span>
+          </div>
         </div>
-        <button onClick={handleDownload} title="Download chart as PNG"
-          className="mr-2 p-1.5 text-slate-500 hover:text-cyan-400 transition-colors rounded-lg hover:bg-white/5">
-          <Download className="w-4 h-4" />
-        </button>
+
+        {/* AI Engine Switcher */}
+        <div className="flex items-center space-x-1 bg-white/5 p-1 rounded-xl border border-white/10">
+          {[
+            { id: 'ollama', label: '🦙 Ollama Local', desc: 'Local AI (Ollama - Free & Private)' },
+            { id: 'optimus', label: '⚡ Hybrid Core', desc: 'Ollama AI + Telemetry SQL' },
+            { id: 'gemini', label: '🌌 Gemini Cloud', desc: 'Google Gemini API' },
+          ].map(eng => (
+            <button
+              key={eng.id}
+              onClick={() => { cyberAudio.playClick(); setAiEngine(eng.id); }}
+              title={eng.desc}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-orbitron font-bold transition-all ${
+                aiEngine === eng.id
+                  ? isAutobot 
+                    ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 shadow-sm' 
+                    : 'bg-fuchsia-500/30 text-fuchsia-200 border border-fuchsia-400/40 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {eng.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center space-x-1">
+          <button 
+            onClick={() => { cyberAudio.playClick(); setShowSaved(!showSaved); setShowHistory(false); }}
+            className={`p-1.5 rounded-lg transition-colors ${showSaved ? 'bg-amber-500/20 text-amber-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`} 
+            title="Saved queries"
+          >
+            <Star className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={() => { cyberAudio.playClick(); setShowHistory(!showHistory); setShowSaved(false); }}
+            className={`p-1.5 rounded-lg transition-colors ${showHistory ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`} 
+            title="Query history"
+          >
+            <Clock className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Chart Area */}
-      <div className="p-4">
-        {activeTab === 'timeseries' && <TimeSeriesTab chartData={chartData} forecastData={forecastData} />}
-        {activeTab === 'depth' && <DepthProfileTab chartData={chartData} />}
-        {activeTab === 'ts' && <TSDiagramTab chartData={chartData} />}
-        {activeTab === 'bgc' && <BGCTab chartData={chartData} />}
-        {activeTab === 'forecast' && <ForecastTab forecastData={forecastData} chartData={chartData} />}
+      {/* History Panel */}
+      {showHistory && history.length > 0 && (
+        <div className="border-b border-white/8 p-3 space-y-1 bg-black/60">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-orbitron font-bold text-slate-400 uppercase tracking-wider">Recent Cyber Queries</span>
+            <button onClick={clearHistory} className="text-xs text-rose-400 hover:text-rose-300 flex items-center space-x-1">
+              <Trash2 className="w-3 h-3" /><span>Clear</span>
+            </button>
+          </div>
+          {history.map((q, i) => (
+            <div key={i} className="flex items-center justify-between group">
+              <button onClick={() => submitQuery(q)} className="flex-1 text-left text-xs font-rajdhani text-slate-300 hover:text-cyan-300 truncate py-1 px-2 rounded hover:bg-white/5 transition-colors">{q}</button>
+              <button onClick={() => toggleSave(q)} className={`p-1 opacity-0 group-hover:opacity-100 transition-all ${saved.includes(q) ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}>
+                <Star className="w-3 h-3" fill={saved.includes(q) ? 'currentColor' : 'none'} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Saved Panel */}
+      {showSaved && saved.length > 0 && (
+        <div className="border-b border-white/8 p-3 space-y-1 bg-black/60">
+          <span className="text-[10px] font-orbitron font-bold text-amber-400 uppercase tracking-wider block mb-2">Saved Neural Vault</span>
+          {saved.map((q, i) => (
+            <div key={i} className="flex items-center justify-between group">
+              <button onClick={() => submitQuery(q)} className="flex-1 text-left text-xs font-rajdhani text-amber-300 hover:text-amber-200 truncate py-1 px-2 rounded hover:bg-white/5 transition-colors">{q}</button>
+              <button onClick={() => toggleSave(q)} className="p-1 text-amber-400 hover:text-rose-400">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Main Console Output */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[180px] max-h-[320px]">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-10 space-y-3">
+            <div className="loader" />
+            <div className="flex items-center space-x-2">
+              <Zap className="w-4 h-4 text-amber-400 animate-bounce" />
+              <p className="text-xs text-cyan-400 font-orbitron font-bold tracking-wider animate-pulse">
+                CHARGING ENERGON CORE & EXECUTING QUERY...
+              </p>
+            </div>
+          </div>
+        ) : currentQuery ? (
+          <>
+            {/* User Input bubble */}
+            <div className="flex items-start space-x-3 bg-white/4 border border-white/8 p-3 rounded-xl">
+              <div className={`p-1.5 rounded-xl mt-0.5 flex-shrink-0 border ${isAutobot ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-fuchsia-500/20 border-fuchsia-400 text-fuchsia-300'}`}>
+                <User className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] text-cyan-400 font-orbitron font-bold uppercase tracking-wider block mb-1">
+                  Explorer Input ({aiEngine.toUpperCase()} ENGINE)
+                </span>
+                <p className="text-sm font-rajdhani font-semibold text-slate-100">{currentQuery}</p>
+              </div>
+              <button 
+                onClick={() => toggleSave(currentQuery)} 
+                className={`flex-shrink-0 p-1 transition-colors ${saved.includes(currentQuery) ? 'text-amber-400' : 'text-slate-600 hover:text-amber-400'}`}
+              >
+                <Star className="w-4 h-4" fill={saved.includes(currentQuery) ? 'currentColor' : 'none'} />
+              </button>
+            </div>
+
+            {/* AI Response Output */}
+            {currentAnswer && (
+              <div className={`p-4 rounded-xl border ${isAutobot ? 'bg-cyan-950/20 border-cyan-500/30' : 'bg-fuchsia-950/20 border-fuchsia-500/30'}`}>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center space-x-2">
+                    <div className={`p-1.5 rounded-xl font-orbitron font-bold text-xs ${isAutobot ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-black' : 'bg-gradient-to-r from-fuchsia-600 to-purple-800 text-white'}`}>
+                      {isAutobot ? '🤖 OPTIMUS' : '🔊 SOUNDWAVE'}
+                    </div>
+                    <span className="text-[10px] font-orbitron font-bold text-cyan-300 uppercase tracking-wider">
+                      CYBERTRON DATA RESPONSE
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <button 
+                      onClick={copyAnswer} 
+                      className="p-1.5 text-slate-400 hover:text-cyan-300 transition-colors" 
+                      title="Copy response"
+                    >
+                      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                {copied && <span className="text-xs text-emerald-400 mb-1 block font-rajdhani font-bold">✓ Copied to clipboard</span>}
+                <div 
+                  className="text-sm font-rajdhani text-slate-200 leading-relaxed space-y-2 whitespace-pre-line"
+                  dangerouslySetInnerHTML={{ __html: parseMarkdown(currentAnswer) }} 
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-6 text-center space-y-3.5">
+            <div className="relative">
+              <img src="/images/argo-schematic.png" alt="ARGO Telemetry Schematic" className="w-[150px] h-[100px] object-cover rounded-xl border border-cyan-500/20 shadow-lg shadow-cyan-500/10" />
+              <div className="absolute -bottom-1 -right-1 bg-cyan-900/90 border border-cyan-400/40 text-cyan-300 text-[8px] font-orbitron font-bold px-1.5 py-0.5 rounded-md animate-pulse">
+                SYS_ONLINE
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-orbitron font-bold text-white tracking-widest uppercase">CYBERTRON COMMAND CONSOLE ONLINE</p>
+              <p className="text-[11px] text-slate-400 max-w-sm mx-auto font-rajdhani mt-1">
+                Execute natural language queries for ARGO float temperature, salinity, and depth profiles.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Console Input Bar */}
+      <div className="p-3.5 border-t border-white/8 bg-black/40 space-y-2.5">
+        {/* Chips */}
+        <div className="flex overflow-x-auto gap-2 pb-1 scrollbar-none">
+          {SUGGESTED_PROMPTS.map((prompt, idx) => (
+            <button 
+              key={idx} 
+              onClick={() => submitQuery(prompt)} 
+              disabled={loading}
+              className="text-xs font-rajdhani font-semibold bg-white/4 hover:bg-white/10 border border-white/10 hover:border-cyan-400/40 text-slate-300 hover:text-white px-3 py-1 rounded-xl transition-all whitespace-nowrap flex-shrink-0"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+
+        {/* Input Form */}
+        <form onSubmit={handleSubmit} className="relative flex items-center">
+          <input 
+            ref={inputRef} 
+            type="text" 
+            value={inputText} 
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSubmit(e); }}
+            placeholder="Ask about ocean temperature, salinity, or depth..."
+            disabled={loading}
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all pr-12 font-rajdhani" 
+          />
+          <button 
+            type="submit" 
+            disabled={loading || !inputText.trim()}
+            className={`absolute right-2 text-white p-2 rounded-lg transition-all shadow-lg ${
+              isAutobot 
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-cyan-500/25' 
+                : 'bg-gradient-to-r from-fuchsia-600 to-purple-800 hover:from-fuchsia-500 hover:to-purple-700 shadow-fuchsia-500/25'
+            } disabled:opacity-30`}
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
       </div>
     </div>
   );
