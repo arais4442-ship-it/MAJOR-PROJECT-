@@ -40,12 +40,13 @@ function EmptyState({ label }) {
 
 function TimeSeriesTab({ chartData, forecastData }) {
   if (!chartData) return <EmptyState label="time series" />;
-  const isDepth = chartData.type === 'depth_profile';
   const unit = chartData.unit || '°C';
   const param = chartData.parameter || 'Temperature';
+  const timeSeriesX = chartData.time_series_x || chartData.x || [];
+  const timeSeriesY = chartData.time_series_y || chartData.y || [];
 
   const traces = [{
-    x: chartData.x, y: chartData.y,
+    x: timeSeriesX, y: timeSeriesY,
     mode: 'lines+markers', type: 'scatter',
     name: `${param} (${unit})`,
     line: { color: '#00d4ff', width: 2.5 },
@@ -67,8 +68,8 @@ function TimeSeriesTab({ chartData, forecastData }) {
   return (
     <Plot data={traces}
       layout={{ ...DARK_LAYOUT, autosize: true,
-        xaxis: { ...DARK_LAYOUT.xaxis, title: { text: chartData.x_label || 'Date', font: { color: '#64748b' } } },
-        yaxis: { ...DARK_LAYOUT.yaxis, title: { text: chartData.y_label || `${param} (${unit})`, font: { color: '#64748b' } } }
+        xaxis: { ...DARK_LAYOUT.xaxis, title: { text: chartData.time_series_x_label || 'Date', font: { color: '#64748b' } } },
+        yaxis: { ...DARK_LAYOUT.yaxis, title: { text: chartData.time_series_y_label || `${param} (${unit})`, font: { color: '#64748b' } } }
       }}
       useResizeHandler style={{ width: '100%', height: '280px' }}
       config={{ responsive: true, displayModeBar: false }} />
