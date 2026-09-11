@@ -8,11 +8,8 @@ import { cyberAudio } from '../utils/cyberAudio';
 
 const SUGGESTED_PROMPTS = [
   "Show temperature trends in Arabian Sea",
-  "Predict salinity trends next month",
   "Compare surface vs deep pressure profiles",
   "Show float profiles in Bay of Bengal",
-  "Dissolved oxygen at 200m depth",
-  "Chlorophyll-a levels near surface",
   "Temperature anomalies this year",
   "Salinity in equatorial Indian Ocean",
 ];
@@ -260,7 +257,7 @@ export default function ChatInterface({
             <div>
               <p className="text-xs font-orbitron font-bold text-white tracking-widest uppercase">CYBERTRON COMMAND CONSOLE ONLINE</p>
               <p className="text-[11px] text-slate-400 max-w-sm mx-auto font-rajdhani mt-1">
-                Execute natural language queries for ARGO float temperature, salinity, oxygen, depth profiles, and LSTM forecasts.
+                Execute natural language queries for ARGO float temperature, salinity, and depth profiles.
               </p>
             </div>
           </div>
@@ -291,7 +288,7 @@ export default function ChatInterface({
             value={inputText} 
             onChange={e => setInputText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSubmit(e); }}
-            placeholder="Ask about ocean temperature, salinity, O₂, chlorophyll, depth..."
+            placeholder="Ask about ocean temperature, salinity, or depth..."
             disabled={loading}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all pr-12 font-rajdhani" 
           />
