@@ -81,7 +81,7 @@ export default function Header({ faction = 'autobot', setFaction, onRunQuery }) 
               </span>
             </div>
             <p className="text-[11px] text-cyan-400/80 font-rajdhani tracking-wide">
-              ARGO Cybertronian Telemetry System · Hybrid ML & LSTM Engine
+              ARGO Cybertronian Telemetry System · Hybrid ML Engine
             </p>
           </div>
         </div>
