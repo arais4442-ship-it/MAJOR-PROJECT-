@@ -14,8 +14,6 @@ const REGIONS = [
 const PARAMETERS = [
   { label: 'Temperature', value: 'temperature', color: 'text-orange-400', bg: 'bg-orange-400/10 border-orange-400/30' },
   { label: 'Salinity', value: 'salinity', color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/30' },
-  { label: 'Dissolved O₂', value: 'dissolved_oxygen', color: 'text-green-400', bg: 'bg-green-400/10 border-green-400/30' },
-  { label: 'Chlorophyll-a', value: 'chlorophyll', color: 'text-emerald-400', bg: 'bg-emerald-400/10 border-emerald-400/30' },
 ];
 
 export default function FilterPanel({ onFilterChange }) {
