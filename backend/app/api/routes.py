@@ -179,6 +179,10 @@ async def process_query(req: QueryRequest, db: AsyncSession = Depends(get_db)):
             "y": values[:100] if not is_depth else pressures[:100],
             "x_label": "Date" if not is_depth else f"{param_name.capitalize()} ({unit})",
             "y_label": f"{param_name.capitalize()} ({unit})" if not is_depth else "Pressure / Depth (dbar)",
+            "time_series_x": dates[:100],
+            "time_series_y": values[:100],
+            "time_series_x_label": "Date",
+            "time_series_y_label": f"{param_name.capitalize()} ({unit})",
             "parameter": param_name.capitalize(),
             "unit": unit,
         }
