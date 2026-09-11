@@ -243,7 +243,7 @@ export default function ChatInterface({
                 </div>
                 {copied && <span className="text-xs text-emerald-400 mb-1 block font-rajdhani font-bold">✓ Copied to clipboard</span>}
                 <div 
-                  className="text-sm font-rajdhani text-slate-200 leading-relaxed space-y-2"
+                  className="text-sm font-rajdhani text-slate-200 leading-relaxed space-y-2 whitespace-pre-line"
                   dangerouslySetInnerHTML={{ __html: parseMarkdown(currentAnswer) }} 
                 />
               </div>
