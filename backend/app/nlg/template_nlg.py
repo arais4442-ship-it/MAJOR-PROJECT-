@@ -22,25 +22,29 @@ class TemplateNLG:
         if intent == "forecast":
             return (
                 f"**LSTM Ocean Forecast for {region} ({param})**\n\n"
-                f"Based on historical ARGO float profile series from {count} profile observations, "
-                f"the forecasted {param.lower()} over the upcoming sequence is predicted to average **{mean_val} {unit}** "
-                f"(Range: **{min_val} {unit}** to **{max_val} {unit}**).\n\n"
-                f"*(Model benchmarked RMSE: ±0.32 {unit} vs. naive persistence baseline)*"
+                f"1. **Parameter:** {param} ({unit})\n"
+                f"2. **Historical observations:** {count} verified ARGO profiles\n"
+                f"3. **Predicted average:** **{mean_val} {unit}**\n"
+                f"4. **Observed range:** **{min_val} {unit}** to **{max_val} {unit}**\n"
+                f"5. **Model accuracy:** Benchmark RMSE is ±0.32 {unit} against a naive persistence baseline."
             )
         elif intent == "comparison":
             return (
                 f"**Comparative Analysis for {region} ({param})**\n\n"
-                f"Across {count} verified ARGO profiles, {param.lower()} values range from **{min_val} {unit}** to **{max_val} {unit}**, "
-                f"with a regional mean of **{mean_val} {unit}**.\n\n"
-                f"Data points passed Quality Control flags (QC=1 Good Data)."
+                f"1. **Parameter:** {param} ({unit})\n"
+                f"2. **Verified profiles:** {count}\n"
+                f"3. **Minimum value:** **{min_val} {unit}**\n"
+                f"4. **Maximum value:** **{max_val} {unit}**\n"
+                f"5. **Regional mean:** **{mean_val} {unit}**; all points passed QC=1 (Good Data)."
             )
         else:
             return (
                 f"**ARGO Data Summary for {region} — {param}**\n\n"
-                f"Retrieved **{count} depth measurements** across verified ARGO floats. "
-                f"Average {param.lower()} recorded is **{mean_val} {unit}** "
-                f"(Minimum: **{min_val} {unit}**, Maximum: **{max_val} {unit}**).\n\n"
-                f"All numeric values are extracted directly from PostgreSQL/PostGIS database records."
+                f"1. **Measurements:** {count} depth readings from verified ARGO floats\n"
+                f"2. **Average {param.lower()}:** **{mean_val} {unit}**\n"
+                f"3. **Minimum:** **{min_val} {unit}**\n"
+                f"4. **Maximum:** **{max_val} {unit}**\n"
+                f"5. **Data quality:** Numeric values were extracted directly from PostgreSQL/PostGIS records."
             )
 
 template_nlg = TemplateNLG()
