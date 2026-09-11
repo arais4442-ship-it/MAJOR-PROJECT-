@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Layers, Search, X, ChevronRight, ChevronDown, RefreshCw,
-  Thermometer, Droplets, Wind, FlaskConical, MapPin, Calendar,
+  Thermometer, Droplets, MapPin, Calendar,
   Database, AlertCircle, CheckCircle, ArrowUpDown
 } from 'lucide-react';
 
@@ -34,8 +34,6 @@ const MOCK_DETAIL = (id) => ({
   summary: {
     temperature: { min: 8.2, max: 29.5, mean: 21.3 },
     salinity: { min: 34.5, max: 36.2, mean: 35.4 },
-    dissolved_oxygen: { min: 12.1, max: 210.3, mean: 145.6 },
-    chlorophyll: { min: 0.0, max: 1.2, mean: 0.4 },
   },
   measurements: [0, 10, 20, 50, 100, 200, 300, 500, 750, 1000].map((p, i) => ({
     pressure: p,
@@ -43,8 +41,6 @@ const MOCK_DETAIL = (id) => ({
     temperature_qc: 1,
     salinity: parseFloat((36.2 - i * 0.17).toFixed(3)),
     salinity_qc: 1,
-    dissolved_oxygen: parseFloat((210 - i * 18).toFixed(1)),
-    chlorophyll: parseFloat(Math.max(0, 1.2 - i * 0.13).toFixed(3)),
   })),
 });
 
@@ -160,8 +156,6 @@ function ProfileDetailPanel({ profileId, onClose }) {
           <div className="grid grid-cols-2 gap-2">
             <SummaryCard icon={Thermometer} label="Temperature °C" stats={detail.summary?.temperature} color="text-orange-400" />
             <SummaryCard icon={Droplets} label="Salinity PSU" stats={detail.summary?.salinity} color="text-blue-400" />
-            <SummaryCard icon={Wind} label="Dissolved O₂" stats={detail.summary?.dissolved_oxygen} color="text-green-400" />
-            <SummaryCard icon={FlaskConical} label="Chlorophyll-a" stats={detail.summary?.chlorophyll} color="text-emerald-400" />
           </div>
 
           {/* Tabs */}
@@ -181,7 +175,7 @@ function ProfileDetailPanel({ profileId, onClose }) {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-white/4 border-b border-white/8">
-                    {['Depth (dbar)', 'Temp (°C)', 'Salinity', 'O₂', 'Chl-a'].map(h => (
+                    {['Depth (dbar)', 'Temp (°C)', 'Salinity'].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-slate-400 font-semibold whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -196,8 +190,6 @@ function ProfileDetailPanel({ profileId, onClose }) {
                       <td className="px-3 py-1.5 font-mono text-blue-300">
                         {m.salinity?.toFixed(3) ?? '—'}<QcBadge qc={m.salinity_qc} />
                       </td>
-                      <td className="px-3 py-1.5 font-mono text-green-300">{m.dissolved_oxygen?.toFixed(1) ?? '—'}</td>
-                      <td className="px-3 py-1.5 font-mono text-emerald-300">{m.chlorophyll?.toFixed(3) ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
